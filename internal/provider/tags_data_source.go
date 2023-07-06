@@ -33,7 +33,7 @@ type TagsDataSourceModel struct {
 	Config        types.Object `tfsdk:"config"`
 	TargetPackage types.String `tfsdk:"target_package"`
 
-	Tags []string `tfsdk:"tags"`
+	Tags types.Set `tfsdk:"tags"`
 }
 
 func (d *TagsDataSource) Metadata(ctx context.Context, req datasource.MetadataRequest, resp *datasource.MetadataResponse) {
@@ -53,7 +53,7 @@ func (d *TagsDataSource) Schema(ctx context.Context, req datasource.SchemaReques
 				MarkdownDescription: "The package name to extract tags for.",
 				Required:            true,
 			},
-			"tags": schema.ListAttribute{
+			"tags": schema.SetAttribute{
 				MarkdownDescription: "The tags for the target package.",
 				Computed:            true,
 				ElementType:         basetypes.StringType{},
@@ -97,9 +97,16 @@ func (d *TagsDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 	for _, pkg := range ic.Contents.Packages {
 		if strings.HasPrefix(pkg, data.TargetPackage.ValueString()+"=") {
 			fullVersion := strings.TrimPrefix(pkg, data.TargetPackage.ValueString()+"=")
-			data.Tags = getStemmedVersionTags(fullVersion)
-			data.Tags = append(data.Tags, fullVersion)
-			sort.Strings(data.Tags)
+			tags := getStemmedVersionTags(fullVersion)
+			tags = append(tags, fullVersion)
+			data.Id = types.StringValue(strings.Join(tags, ","))
+
+			val, diag := types.SetValueFrom(ctx, types.StringNull().Type(ctx), tags)
+			if diag.HasError() {
+				resp.Diagnostics.Append(diag...)
+				return
+			}
+			data.Tags = val
 			found = true
 			break
 		}
@@ -108,8 +115,6 @@ func (d *TagsDataSource) Read(ctx context.Context, req datasource.ReadRequest, r
 		resp.Diagnostics.AddError("Unable to find package", fmt.Sprintf("Unable to find package: %s", data.TargetPackage.ValueString()))
 		return
 	}
-
-	data.Id = types.StringValue(strings.Join(data.Tags, ","))
 
 	tflog.Trace(ctx, "read a data source")
 

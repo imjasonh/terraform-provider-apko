@@ -56,8 +56,10 @@ data "apko_tags" "ko" {
   config         = data.apko_config.this.config
   target_package = "ko"
 }
+
+output "ko-tags" { value = data.apko_tags.ko.tags }
 `,
-			Check: resource.ComposeTestCheckFunc(
+			Check: resource.ComposeAggregateTestCheckFunc(
 				resource.TestCheckResourceAttr("data.apko_tags.glibc", "tags.#", "3"),
 				resource.TestCheckResourceAttr("data.apko_tags.glibc", "tags.0", "2"),
 				resource.TestCheckResourceAttr("data.apko_tags.glibc", "tags.1", "2.37"),
